@@ -1,6 +1,6 @@
 # Set up MQTT Server
 import paho.mqtt.client as mqtt # Using Paho MQTT Python client
-
+import time
 class LiftSim():
     def __init__(self, IP):
         # States connection state with the MQTT server
@@ -35,23 +35,23 @@ class LiftSim():
     # The following functions are created for the Paho MQTT Client ---------------------------
 
     # Assigned to client.on_connect, which runs every time the client establishes a connection with the MQTT server
-    def on_connected(self):
+    def on_connected(self, client, userdata, flags, rc):
         # Update connection state
         self._isConnected = True
 
         print("Connected to MQTT broker.")
 
     # Assigned to client.on_disconnect, which runs every time the client disconnects from the MQTT broker
-    def on_disconnected(self):
+    def on_disconnected(self, client, userdata, rc):
         self._isConnected = False
         print("Disconnected from MQTT broker")
     
     def subscribeToTopics(self, mqttClient):
         mqttClient.subscribe("lift_sim/curr_level")
         mqttClient.subscribe("lift_sim/door_state")
-        mqttClient.subscripe("lift_control/interface/current_lift_state")
+        mqttClient.subscribe("lift_control/interface/current_lift_state")
 
-        print(f"Subscribed to topic: {topic}")
+        print(f"Subscribed to topics.")
 
     # The following callback methods will be called as part of the template function calls
     def get_lift_sim_current_level(self, client, userdata, msg):
@@ -97,13 +97,13 @@ class LiftSim():
         
     # ----------------------------
     def check_connection(self) -> bool:
-        if self.isConnected == True:
+        if self._isConnected == True:
             return True
         else:
             return False
 
 mqttClient = mqtt.Client("lift_adapter")
-simulator = LiftSim("127.0.0.1")
+simulator = LiftSim("192.168.228.91")
 
 # Run set-up Commands
 mqttClient.on_connect = simulator.on_connected
@@ -114,5 +114,9 @@ mqttClient.connect(simulator.IP_ADDRESS, simulator.PORT)
 # STart a new loop
 mqttClient.loop_start()
 simulator.subscribeToTopics(mqttClient)
+while True:
+    time.sleep(2)
+    if simulator.check_connection() == False:
+        print("attempting to reconnect")
 
-
+#test
