@@ -57,12 +57,15 @@ class LiftSim():
     def get_lift_sim_current_level(self, client, userdata, msg):
         try: 
             self._lift_sim_state["current_level"] = msg.payload.decode("utf-8")
-        except:
+            print(f"Floor: {self._lift_sim_state['current_level']}")
+        except Exception as e:
             self._lift_sim_state["current_level"] = None
+            print(f"Error {e}")
 
     def get_lift_sim_door_state(self, client, userdata, msg):
         try: 
             self._lift_sim_state["door_state"] = msg.payload.decode("utf-8")
+            print(f"Door State: {self._lift_sim_state['door_state']}")
         except:
             self._lift_sim_state["door_state"] = None
 
