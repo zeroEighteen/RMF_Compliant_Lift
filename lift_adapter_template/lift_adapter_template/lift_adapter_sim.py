@@ -39,7 +39,7 @@ class LiftSim():
         self._lift_requests_list = []
 
     def get_lift_requests_list(self):
-        return self._lift_requests_queue
+        return self._lift_requests_list
 
     def lift_queue_is_empty(self):
         if self._lift_requests_queue == []:
@@ -52,10 +52,9 @@ class LiftSim():
         # Resolving lift request means to 
         #   1) Remove the ID from the queue
         #   2) Remove the associated data from the list
-
         queueIndex = self._lift_requests_queue.index(request_id)
-        self._lift_requests_queue.remove(queueIndex)
-        self._lift_requests_list.remove(queueIndex)
+        self._lift_requests_queue.remove(request_id)
+        self._lift_requests_list.pop(queueIndex)
         print(f"Lift Request ID {request_id} resolved")
 
 
@@ -82,7 +81,7 @@ class LiftSim():
         print(f"Subscribed to topics.")
 
     def createNewLiftRequest(self, request_id, request_level, destination_level):
-        new = self._lift_request.copy.deepcopy()
+        new = copy.deepcopy(self._lift_request)
         new["request_id"] = request_id
         new["request_level"] = request_level
         new["destination_level"] = destination_level
@@ -125,9 +124,10 @@ class LiftSim():
             info = msg.payload.decode("utf-8")
             allInfo =  info.split(";")
             if allInfo[1] not in self._lift_requests_queue:
-                newLiftRequest = createNewLiftRequest(allInfo[1], allInfo[2], allInfo[3])
+                newLiftRequest = self.createNewLiftRequest(allInfo[1], allInfo[2], allInfo[3])
+                self._lift_requests_queue.append(allInfo[1])
                 self._lift_requests_list.append(newLiftRequest)
-                print(f"New Request queued. \nID: {allInfo{1}} \nRequest Floor: {allInfo[2]} \nDestination Floor:{allInfo[3]}")
+                print(f"New Request queued. \nID: {allInfo[1]} \nRequest Floor: {allInfo[2]} \nDestination Floor:{allInfo[3]}")
         except Exception as e:
             print(f"Error {e}")
     
@@ -148,9 +148,10 @@ simulator = LiftSim("192.168.18.3")
 
 def publish_lift_state_update():
     requestData = simulator.get_lift_requests_list()
-    simulator.publish_lift_requests_to_lift_sim(simulator.requestData["request_level"], mqttClient)
-    simulator.publish_lift_requests_to_lift_sim(simulator.request["destination_level"], mqttClient)
-    simulator.resolve_lift_request(requestData["request_id"])
+    print(requestData)
+    simulator.publish_lift_requests_to_lift_sim(requestData[0]["request_level"], mqttClient)
+    simulator.publish_lift_requests_to_lift_sim(requestData[0]["destination_level"], mqttClient)
+    simulator.resolve_lift_request(requestData[0]["request_id"])
     print("Message successfully published. Lift request queue updated.")
     
 # Run set-up Commands
@@ -163,7 +164,7 @@ mqttClient.loop_start()
 simulator.subscribeToTopics(mqttClient)
 while True:
     time.sleep(2)
-    print("loop")
+    print(".", end="")
     if simulator.lift_queue_is_empty() == False:
         publish_lift_state_update()
     if simulator.check_connection() == False:
