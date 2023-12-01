@@ -87,6 +87,12 @@ class LiftSim():
         new["destination_level"] = destination_level
 
         return new
+    
+    def destination_floor_reached_check(self):
+        # If the door is open AND if the destination floor is reached, release the request
+        if self._lift_sim_state["door_state"] == "Opened" && self._lift_sim_state["destination_floor"] == self._lift_requests_list[0]["destination_floor"]:
+            return True
+        
 
     # The following callback methods will be called as part of the template function calls
     def get_lift_sim_current_level(self, client, userdata, msg):
@@ -101,6 +107,10 @@ class LiftSim():
         try: 
             self._lift_sim_state["door_state"] = msg.payload.decode("utf-8")
             print(f"Door State: {self._lift_sim_state['door_state']}")
+
+            if destination_floor_reached_check():
+                resolve_lift_request(self._lift_requests_queue[0])
+                
         except Exception as e:
             print(e)
             self._lift_sim_state["door_state"] = None
@@ -164,7 +174,7 @@ mqttClient.loop_start()
 simulator.subscribeToTopics(mqttClient)
 while True:
     time.sleep(2)
-    print(".", end="")
+    print("|")
     if simulator.lift_queue_is_empty() == False:
         publish_lift_state_update()
     if simulator.check_connection() == False:
