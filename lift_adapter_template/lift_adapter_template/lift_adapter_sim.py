@@ -23,7 +23,8 @@ class LiftSim():
         self._lift_request = {
             "lift_name": "test_lift",
             "session_id": "1234",
-            "request_type": "1", 
+            "request_type": "1",
+            "request_floor": "1", 
             "destination_floor": "0", 
             "door_state": 2
         }
@@ -66,7 +67,8 @@ class LiftSim():
         try: 
             self._lift_sim_state["door_state"] = msg.payload.decode("utf-8")
             print(f"Door State: {self._lift_sim_state['door_state']}")
-        except:
+        except Exception as e:
+            print(e)
             self._lift_sim_state["door_state"] = None
 
     def set_topicsToSub(self, topicList):
@@ -76,22 +78,27 @@ class LiftSim():
 
     def publish_lift_requests_to_lift_sim(self, level, mqttClient):
         try:
-            pubMsg = mqttClient.publish(topic="lift_sim/button_pressed", payload=level.encode('utf-8'), qos=1)
-
+            pubMsg = mqttClient.publish(topic="lift_sim/button_pressed", payload=level.encode('utf-8'), qos=0)
+            print("pubMsg set")
             #Library methods, idk what they do
             pubMsg.wait_for_publish()
+            print("wait for publish complete")
             print(pubMsg.is_published())
 
         except Exception as e:
-            print(e)
+            print(f"Error {e} ")
 
     def get_lift_requests_destination_floor(self, client, userdata, msg):
         try:
-            self._lift_request["destination_floor"] = msg.payload.decode("utf-8")
-            self.publish_lift_requests_to_lift_sim(self._lift_request["destination_floor"], client)
-            print(f"Request to go from ")
-        except:
-            self._lift_request["destination_floor"] = None
+            info = msg.payload.decode("utf-8")
+            print(f"State  update received: {info}")
+            allInfo =  info.split(";")
+            print(f"Going form {allInfo[2]} to {allInfo[3]}")
+            self._lift_request["destination_floor"] = str(allInfo[3])
+            self._lift_request["request_floor"] = str(allInfo[2])
+            print("variables set")
+        except Exception as e:
+            print(f"Error {e}")
     
     def attachCallbackFunctions(self):
         mqttClient.message_callback_add("lift_sim/curr_level", self.get_lift_sim_current_level)
@@ -106,20 +113,34 @@ class LiftSim():
             return False
 
 mqttClient = mqtt.Client("lift_adapter")
-simulator = LiftSim("192.168.228.91")
+simulator = LiftSim("192.168.18.3")
+
+def on_publish(client, userdata, result):
+    print("datapbulished: ")
+    pass
+
 
 # Run set-up Commands
 mqttClient.on_connect = simulator.on_connected
 mqttClient.on_disconnect = simulator.on_disconnected
 simulator.attachCallbackFunctions()
+mqttClient.on_publish = on_publish
 mqttClient.connect(simulator.IP_ADDRESS, simulator.PORT)
-
 # STart a new loop
 mqttClient.loop_start()
 simulator.subscribeToTopics(mqttClient)
 while True:
     time.sleep(2)
+    print("loop")
+    if simulator._lift_request["request_floor"] != None:
+        simulator.publish_lift_requests_to_lift_sim(simulator._lift_request["request_floor"], mqttClient)
+        print("one sent")
+        simulator.publish_lift_requests_to_lift_sim(simulator._lift_request["request_floor"], mqttClient)
+        print("two  sent")
+        simulator._lift_request["request_floor"] = None
+        simulator._lift_request["destination_floor"] = None
     if simulator.check_connection() == False:
         print("attempting to reconnect")
+   #  simulator.publish_lift_requests_to_lift_sim("7", mqttClient)
 
 #test
