@@ -30,6 +30,7 @@ class LiftSim():
             "request_id": "123456",
             "request_level": None, 
             "destination_level": None, 
+            "publish_state" : "0"
         }
 
         # Parallel arrays
@@ -72,6 +73,9 @@ class LiftSim():
     def on_disconnected(self, client, userdata, rc):
         self._isConnected = False
         print("Disconnected from MQTT broker")
+
+    def set_lift_request_publish_state(self):
+        self._lift_requests_list[0]["publish_state"] = "1"
     
     def subscribeToTopics(self, mqttClient):
         mqttClient.subscribe("lift_sim/curr_level")
@@ -85,19 +89,25 @@ class LiftSim():
         new["request_id"] = request_id
         new["request_level"] = request_level
         new["destination_level"] = destination_level
+        new["service_state"] = "0"
 
         return new
     
-    def destination_floor_reached_check(self):
+    def destination_level_reached_check(self):
         # If the door is open AND if the destination floor is reached, release the request
-        if self._lift_sim_state["door_state"] == "Opened" && self._lift_sim_state["destination_floor"] == self._lift_requests_list[0]["destination_floor"]:
+
+
+        if self._lift_sim_state["door_state"] == "Opened" and self._lift_sim_state["current_level"] == self._lift_requests_list[0]["destination_level"]:
             return True
         
 
     # The following callback methods will be called as part of the template function calls
     def get_lift_sim_current_level(self, client, userdata, msg):
         try: 
-            self._lift_sim_state["current_level"] = msg.payload.decode("utf-8")
+            level = msg.payload.decode("utf-8")
+            if len(level) == 1:
+               level = "0" + level
+            self._lift_sim_state["current_level"] = level
             print(f"Floor: {self._lift_sim_state['current_level']}")
         except Exception as e:
             self._lift_sim_state["current_level"] = None
@@ -108,11 +118,11 @@ class LiftSim():
             self._lift_sim_state["door_state"] = msg.payload.decode("utf-8")
             print(f"Door State: {self._lift_sim_state['door_state']}")
 
-            if destination_floor_reached_check():
-                resolve_lift_request(self._lift_requests_queue[0])
+            if self.destination_level_reached_check():
+               self. resolve_lift_request(self._lift_requests_queue[0])
                 
         except Exception as e:
-            print(e)
+            print(f"Error: {e}")
             self._lift_sim_state["door_state"] = None
 
     def set_topicsToSub(self, topicList):
@@ -133,7 +143,7 @@ class LiftSim():
         try:
             info = msg.payload.decode("utf-8")
             allInfo =  info.split(";")
-            if allInfo[1] not in self._lift_requests_queue:
+            if (allInfo[1]  in self._lift_requests_queue) == False:
                 newLiftRequest = self.createNewLiftRequest(allInfo[1], allInfo[2], allInfo[3])
                 self._lift_requests_queue.append(allInfo[1])
                 self._lift_requests_list.append(newLiftRequest)
@@ -158,11 +168,11 @@ simulator = LiftSim("192.168.18.3")
 
 def publish_lift_state_update():
     requestData = simulator.get_lift_requests_list()
-    print(requestData)
-    simulator.publish_lift_requests_to_lift_sim(requestData[0]["request_level"], mqttClient)
-    simulator.publish_lift_requests_to_lift_sim(requestData[0]["destination_level"], mqttClient)
-    simulator.resolve_lift_request(requestData[0]["request_id"])
-    print("Message successfully published. Lift request queue updated.")
+    if requestData[0]["publish_state"] == "0":
+        simulator.publish_lift_requests_to_lift_sim(requestData[0]["request_level"], mqttClient)
+        simulator.publish_lift_requests_to_lift_sim(requestData[0]["destination_level"], mqttClient)
+        simulator.set_lift_request_publish_state()
+        print("Message successfully published. Lift request queue updated.")
     
 # Run set-up Commands
 mqttClient.on_connect = simulator.on_connected
@@ -174,7 +184,7 @@ mqttClient.loop_start()
 simulator.subscribeToTopics(mqttClient)
 while True:
     time.sleep(2)
-    print("|")
+    print(f"Queue: {simulator._lift_requests_queue}")
     if simulator.lift_queue_is_empty() == False:
         publish_lift_state_update()
     if simulator.check_connection() == False:
